@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/sidebar';
 import type { ChatUIMessage } from '@/lib/ai';
 import { cn } from '@/lib/utils';
-import { MessageSquare, MoreHorizontal, PenSquare, Swords, Trash2 } from 'lucide-react';
+import { MessageSquare, MoreHorizontal, PenSquare, Phone, Swords, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export interface Chat {
@@ -58,13 +58,20 @@ export function ChatSidebar({ chats, activeChatId, onNewChat, onSelectChat, onDe
       </SidebarHeader>
 
       <SidebarContent className='px-2'>
-        <div className='mb-2 px-2 py-2'>
+        <div className='mb-2 flex flex-col gap-1.5 px-2 py-2'>
           <Link
             href='/arena'
             className='flex items-center gap-2 rounded-lg bg-linear-to-r from-orange-500/10 to-rose-500/10 px-3 py-2 text-sm font-medium text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/20'
           >
             <Swords className='h-4 w-4' />
             Enter Arena
+          </Link>
+          <Link
+            href='/voice'
+            className='flex items-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/20'
+          >
+            <Phone className='h-4 w-4' />
+            Voice Chat
           </Link>
         </div>
 
