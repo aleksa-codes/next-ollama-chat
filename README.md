@@ -4,6 +4,10 @@ A local AI chat application powered by [Ollama](https://ollama.com), built with 
 
 > **Requires Ollama running locally.** Pull any model with `ollama pull <model>` before starting.
 
+| Chat              | Arena               | Voice               |
+| ----------------- | ------------------- | ------------------- |
+| ![Chat](chat.png) | ![Arena](arena.png) | ![Voice](voice.png) |
+
 ## Features
 
 - 💬 **Chat**: multi-turn conversations with markdown and syntax-highlighted code rendering, image attachments for vision models, persistent chat history, and per-chat model selection
