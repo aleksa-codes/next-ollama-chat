@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ArrowUp, Image as ImageIcon, Mic, Square, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { ArrowUp, Image as ImageIcon, Mic, MicOff, Square, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface ImageFile {
   dataUrl: string;
@@ -50,6 +50,88 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<ImageFile[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopRecording = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    recognitionRef.current = null;
+    setIsRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition: any = new SR();
+    recognitionRef.current = recognition;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    const SILENCE_DELAY = 1500;
+    let accumulated = '';
+
+    const armSilenceTimer = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => recognition.stop(), SILENCE_DELAY);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      // Accumulate final segments, show full interim in textarea
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          const seg = event.results[i][0].transcript.trim();
+          if (seg) accumulated = accumulated ? `${accumulated} ${seg}` : seg;
+        }
+      }
+      // Live preview: show accumulated finals + current interim
+      const allParts = Array.from(event.results as SpeechRecognitionResultList)
+        .map((r: SpeechRecognitionResult) => r[0].transcript.trim())
+        .filter(Boolean);
+      onInputChange(allParts.join(' '));
+      armSilenceTimer();
+    };
+
+    recognition.onend = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (accumulated) onInputChange(accumulated);
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = () => {
+      /* onend handles cleanup */
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      /* ignore */
+    }
+    setIsRecording(true);
+  };
+
+  // Stop recognition when the component unmounts
+  useEffect(() => () => stopRecording(), []);
 
   const handleSubmit = () => {
     if (isStreaming && stop) {
@@ -176,14 +258,18 @@ export function ChatInput({
                 <Button
                   variant='ghost'
                   size='icon'
-                  className='text-foreground hover:text-foreground h-10 w-10 shrink-0 rounded-full'
+                  className={cn(
+                    'h-10 w-10 shrink-0 rounded-full transition-colors',
+                    isRecording ? 'text-red-500 hover:text-red-600' : 'text-foreground hover:text-foreground',
+                  )}
                   disabled={disabled}
+                  onClick={toggleRecording}
                 >
-                  <Mic className='h-5 w-5' />
+                  {isRecording ? <MicOff className='h-5 w-5' /> : <Mic className='h-5 w-5' />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side='top' className='text-xs'>
-                Voice input
+                {isRecording ? 'Stop recording' : 'Voice input'}
               </TooltipContent>
             </Tooltip>
 
