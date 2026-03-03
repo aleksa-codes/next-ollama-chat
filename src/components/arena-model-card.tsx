@@ -51,12 +51,16 @@ export function ArenaModelCard({ competitor, mode, model, onSkip }: ArenaModelCa
 
   // Highlight code when view switches to code or code updates
   useEffect(() => {
-    if (view !== 'code' || !competitor.code) {
-      setHighlightedCode('');
-      return;
-    }
+    let cancelled = false;
     const lang = MODE_LANG[mode] || 'html';
-    highlight(extractCode(competitor.code), lang).then(setHighlightedCode);
+    const work =
+      view !== 'code' || !competitor.code ? Promise.resolve('') : highlight(extractCode(competitor.code), lang);
+    work.then((html) => {
+      if (!cancelled) setHighlightedCode(html);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [view, competitor.code, mode]);
 
   useEffect(() => {
@@ -68,11 +72,11 @@ export function ArenaModelCard({ competitor, mode, model, onSkip }: ArenaModelCa
   // Live timer while running
   useEffect(() => {
     if (competitor.status !== 'running' || !competitor.startTime) {
-      setElapsedMs(0);
-      return;
+      const t = setTimeout(() => setElapsedMs(0));
+      return () => clearTimeout(t);
     }
-    setElapsedMs(Date.now() - competitor.startTime);
-    const id = setInterval(() => setElapsedMs(Date.now() - competitor.startTime!), 100);
+    const start = competitor.startTime;
+    const id = setInterval(() => setElapsedMs(Date.now() - start), 100);
     return () => clearInterval(id);
   }, [competitor.status, competitor.startTime]);
 
