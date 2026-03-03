@@ -51,7 +51,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 - [Next.js 16](https://nextjs.org): App Router
 - [Vercel AI SDK](https://sdk.vercel.ai): streaming chat (`useChat` on the client)
-- [ai-sdk-ollama](https://github.com/sgomez/ai-sdk-ollama): Ollama provider; also provides `streamText` used in all API routes for better Ollama compatibility
+- [ai-sdk-ollama](https://github.com/jagreehal/ai-sdk-ollama): Ollama provider; also provides `streamText` used in all API routes for better Ollama compatibility
 - [Tailwind CSS v4](https://tailwindcss.com): utility-first styling
 - [shadcn/ui](https://ui.shadcn.com): component library (New York style)
 - [React 19](https://react.dev) with React Compiler

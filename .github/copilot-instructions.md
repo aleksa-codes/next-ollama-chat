@@ -15,7 +15,7 @@ This is a **local AI chat application** powered by [Ollama](https://ollama.com).
 - **Next.js 16** with App Router (`src/app/`)
 - **React 19.2** with **React Compiler** enabled (`reactCompiler: true` in `next.config.ts`)
 - **Vercel AI SDK** (`ai`, `@ai-sdk/react`) — `useChat` hook on the client
-- **ai-sdk-ollama** — Ollama provider for the AI SDK; also provides `streamText` and `createOllama` (used in all API routes instead of the base AI SDK's `streamText` for better Ollama compatibility)
+- **ai-sdk-ollama** (https://github.com/jagreehal/ai-sdk-ollama) — Ollama provider for the AI SDK; also provides `streamText` and `createOllama` (used in all API routes instead of the base AI SDK's `streamText` for better Ollama compatibility)
 - **Tailwind CSS v4** with OKLCH color system and CSS variables
 - **shadcn/ui** ("new-york" style) component library
 - **TypeScript** with strict mode
