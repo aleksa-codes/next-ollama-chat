@@ -220,7 +220,7 @@ export function ArenaSidebar({
             value={prompt}
             onChange={(e) => onPromptChange(e.target.value)}
             placeholder='Describe what to build...'
-            className='bg-background/50 min-h-[88px] resize-none text-sm'
+            className='bg-background/50 min-h-22 resize-none text-sm'
           />
         </section>
       </div>

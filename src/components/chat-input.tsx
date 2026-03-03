@@ -247,7 +247,7 @@ export function ChatInput({
             placeholder={placeholder || 'Message...'}
             rows={1}
             // Added py-2.5 to vertically center text with the buttons on a single line
-            className='placeholder:text-muted-foreground bg-muted! max-h-[200px] min-h-[40px] flex-1 resize-none border-0 py-2.5 text-base shadow-none focus-visible:ring-0'
+            className='placeholder:text-muted-foreground bg-muted! max-h-50 min-h-10 flex-1 resize-none border-0 py-2.5 text-base shadow-none focus-visible:ring-0'
             disabled={disabled}
           />
 

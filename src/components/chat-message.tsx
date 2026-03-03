@@ -191,7 +191,7 @@ export function ChatMessageItem({ message, isStreaming, regenerate }: ChatMessag
             ))}
           </div>
         )}
-        <div className='bg-secondary text-secondary-foreground max-w-[70%] min-w-[50px] rounded-[18px] px-3 py-2 text-center text-base'>
+        <div className='bg-secondary text-secondary-foreground max-w-[70%] min-w-12.5 rounded-[18px] px-3 py-2 text-center text-base'>
           <div className='whitespace-pre-wrap'>{text}</div>
         </div>
       </div>
@@ -218,7 +218,7 @@ export function ChatMessageItem({ message, isStreaming, regenerate }: ChatMessag
               Thinking
             </span>
             {!isReasoningExpanded && (
-              <span className='text-muted-foreground max-w-[200px] truncate'>{reasoning.substring(0, 50)}...</span>
+              <span className='text-muted-foreground max-w-50 truncate'>{reasoning.substring(0, 50)}...</span>
             )}
           </button>
           {isReasoningExpanded && (
@@ -236,7 +236,7 @@ export function ChatMessageItem({ message, isStreaming, regenerate }: ChatMessag
             <span className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full' />
           </span>
         ) : (
-          <div className='prose text-foreground dark:prose-invert prose-pre:m-0 prose-pre:my-0 prose-pre:rounded-t-none prose-code:m-0 prose-code:p-0 max-w-none break-words'>
+          <div className='prose text-foreground dark:prose-invert prose-pre:m-0 prose-pre:my-0 prose-pre:rounded-t-none prose-code:m-0 prose-code:p-0 max-w-none wrap-break-word'>
             <AsyncHtml html={html} isStreaming={isStreaming} />
           </div>
         )}

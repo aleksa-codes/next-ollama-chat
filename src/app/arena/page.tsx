@@ -217,7 +217,7 @@ export default function ArenaPage() {
                 <currentMode.icon className='text-muted-foreground h-8 w-8 opacity-50' />
               </div>
               <h2 className='text-xl font-medium tracking-tight'>Ready for battle</h2>
-              <p className='text-muted-foreground max-w-[400px] text-sm'>
+              <p className='text-muted-foreground max-w-100 text-sm'>
                 Select at least 2 models from the sidebar, choose a mode, enter a prompt, and click Generate Arena.
               </p>
             </div>
@@ -226,7 +226,7 @@ export default function ArenaPage() {
               {competitors.map((c) => {
                 const model = models.find((m) => m.name === c.id);
                 return (
-                  <div key={c.id} className='h-[500px]'>
+                  <div key={c.id} className='h-125'>
                     <ArenaModelCard
                       competitor={c}
                       mode={currentMode.id}

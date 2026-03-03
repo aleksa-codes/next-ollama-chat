@@ -70,7 +70,7 @@ export function ModelSelector({ value, onValueChange }: ModelSelectorProps) {
       </DropdownMenuTrigger>
 
       {/* Increased width and added padding to match the roomy feel of the image */}
-      <DropdownMenuContent align='start' className='w-[360px] rounded-2xl p-2'>
+      <DropdownMenuContent align='start' className='w-90 rounded-2xl p-2'>
         <div className='flex flex-col gap-1'>
           {models.map((model) => {
             const isSelected = model.name === value;
