@@ -16,6 +16,7 @@ A local AI chat application powered by [Ollama](https://ollama.com), built with 
 - 🖥️ **Screen Share**: share your screen during a voice call; a screenshot is captured the moment you start speaking and sent alongside your message to vision-capable models
 - 🌙 **Dark mode**: system preference detection via next-themes
 - 🔍 **Model capability detection**: vision and thinking support auto-detected per model and reflected in the UI
+- 💾 **Local storage**: chat history in the Chat app is persisted in browser `localStorage` — no database needed; SQLite or any other DB could be swapped in for heavier use
 
 ## Prerequisites
 
