@@ -2,8 +2,20 @@
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { UIMessage } from 'ai';
-import { Brain, Check, ChevronDown, ChevronRight, Copy, RefreshCw, Volume2, VolumeX } from 'lucide-react';
+import type { ChatUIMessage } from '@/lib/ai';
+import {
+  Brain,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Copy,
+  Hash,
+  RefreshCw,
+  Volume2,
+  VolumeX,
+  Zap,
+} from 'lucide-react';
 import { marked } from 'marked';
 import { useEffect, useMemo, useState } from 'react';
 import { codeToHtml } from 'shiki';
@@ -11,12 +23,12 @@ import { codeToHtml } from 'shiki';
 import { useSpeech } from '@/hooks/use-speech';
 
 interface ChatMessageItemProps {
-  message: UIMessage;
+  message: ChatUIMessage;
   isStreaming?: boolean;
   regenerate?: () => void;
 }
 
-function getMessageText(message: UIMessage): string {
+function getMessageText(message: ChatUIMessage): string {
   const textParts = message.parts.filter((part) => part.type === 'text');
   return textParts.map((part) => (part as { type: 'text'; text: string }).text).join('');
 }
@@ -102,13 +114,13 @@ async function renderMarkdown(text: string): Promise<string> {
   return highlightCodeBlocks(html);
 }
 
-function getReasoningText(message: UIMessage): string | undefined {
+function getReasoningText(message: ChatUIMessage): string | undefined {
   const reasoningParts = message.parts.filter((part) => part.type === 'reasoning');
   if (reasoningParts.length === 0) return undefined;
   return reasoningParts.map((part) => (part as { type: 'reasoning'; text: string }).text).join('');
 }
 
-function getMessageImages(message: UIMessage): { url: string; filename?: string }[] {
+function getMessageImages(message: ChatUIMessage): { url: string; filename?: string }[] {
   const fileParts = message.parts.filter((part) => part.type === 'file');
   return fileParts
     .map((part) => {
@@ -231,7 +243,8 @@ export function ChatMessageItem({ message, isStreaming, regenerate }: ChatMessag
       </div>
 
       {text && (
-        <div className='flex items-center gap-0.5'>
+        <div className='flex flex-wrap items-center gap-1'>
+          <GenerationStats metadata={message.metadata} />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant='ghost' size='icon' className='h-8 w-8' onClick={handleCopy}>
@@ -267,6 +280,39 @@ export function ChatMessageItem({ message, isStreaming, regenerate }: ChatMessag
         </div>
       )}
     </div>
+  );
+}
+
+function GenerationStats({ metadata }: { metadata?: { outputTokens?: number; duration?: number } }) {
+  if (!metadata?.outputTokens || !metadata?.duration) return null;
+
+  const { outputTokens, duration } = metadata;
+  const tokPerSec = duration > 0 ? outputTokens / duration : 0;
+
+  return (
+    <>
+      <div className='text-muted-foreground flex items-center gap-2.5 rounded-md px-1.5 py-1 text-xs'>
+        <span className='flex items-center gap-1'>
+          <Zap className='h-3 w-3 text-yellow-500' />
+          <span className='font-medium'>{tokPerSec.toFixed(1)}</span>
+          <span className='text-muted-foreground/70'>tok/s</span>
+        </span>
+        <span className='text-muted-foreground/30'>|</span>
+        <span className='flex items-center gap-1'>
+          <Hash className='text-muted-foreground/60 h-3 w-3' />
+          <span className='font-medium'>{outputTokens.toLocaleString()}</span>
+          <span className='text-muted-foreground/70'>tokens</span>
+        </span>
+        <span className='text-muted-foreground/30'>|</span>
+        <span className='flex items-center gap-1'>
+          <Clock className='text-muted-foreground/60 h-3 w-3' />
+          <span className='font-medium'>
+            {duration < 1 ? `${(duration * 1000).toFixed(0)}ms` : `${duration.toFixed(2)}s`}
+          </span>
+        </span>
+      </div>
+      <div className='bg-border mx-0.5 h-4 w-px' />
+    </>
   );
 }
 

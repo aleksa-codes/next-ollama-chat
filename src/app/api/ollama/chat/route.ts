@@ -1,5 +1,5 @@
-import { convertToModelMessages, smoothStream, streamText, type UIMessage } from 'ai';
-import { createOllama } from 'ai-sdk-ollama';
+import { convertToModelMessages, smoothStream, type UIMessage } from 'ai';
+import { createOllama, streamText } from 'ai-sdk-ollama';
 import { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -14,14 +14,29 @@ export async function POST(request: NextRequest) {
 
     const modelMessages = await convertToModelMessages(messages as UIMessage[]);
 
-    const result = streamText({
+    let startedAt: number;
+
+    const result = await streamText({
       experimental_transform: smoothStream({ chunking: 'word' }),
-      model: ollama(model, { think: supportsThinking }),
+      model: ollama(model, { think: supportsThinking, keep_alive: '5m' }),
       messages: modelMessages,
     });
 
     return result.toUIMessageStreamResponse({
       sendReasoning: true,
+      messageMetadata: ({ part }) => {
+        if (part.type === 'start') {
+          startedAt = Date.now();
+          return undefined;
+        }
+        if (part.type === 'finish' && startedAt) {
+          const duration = (Date.now() - startedAt) / 1000;
+          return {
+            outputTokens: part.totalUsage.outputTokens,
+            duration,
+          };
+        }
+      },
     });
   } catch (error) {
     console.error('[API] Error:', error);

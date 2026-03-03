@@ -8,8 +8,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sidebar, SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useOllamaModels } from '@/hooks/use-ollama-models';
+import type { ChatUIMessage } from '@/lib/ai';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport, type UIMessage } from 'ai';
+import { DefaultChatTransport } from 'ai';
 import { useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'ollama-chat-history';
@@ -59,7 +60,7 @@ function saveSelectedModel(model: string) {
   }
 }
 
-function generateTitle(messages: UIMessage[]): string {
+function generateTitle(messages: ChatUIMessage[]): string {
   const firstUserMessage = messages.find((m) => m.role === 'user');
   if (firstUserMessage) {
     const text = firstUserMessage.parts
@@ -88,7 +89,7 @@ export default function ChatPage() {
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status, stop, setMessages, regenerate } = useChat({
+  const { messages, sendMessage, status, stop, setMessages, regenerate } = useChat<ChatUIMessage>({
     transport: new DefaultChatTransport({ api: '/api/ollama/chat' }),
   });
 

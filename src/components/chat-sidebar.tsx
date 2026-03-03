@@ -20,14 +20,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import type { ChatUIMessage } from '@/lib/ai';
 import { cn } from '@/lib/utils';
-import type { UIMessage } from 'ai';
-import { MessageSquare, MoreHorizontal, PenSquare, Trash2 } from 'lucide-react';
+import { MessageSquare, MoreHorizontal, PenSquare, Swords, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 
 export interface Chat {
   id: string;
   title: string;
-  messages: UIMessage[];
+  messages: ChatUIMessage[];
   model: string;
   createdAt: number;
 }
@@ -57,6 +58,16 @@ export function ChatSidebar({ chats, activeChatId, onNewChat, onSelectChat, onDe
       </SidebarHeader>
 
       <SidebarContent className='px-2'>
+        <div className='mb-2 px-2 py-2'>
+          <Link
+            href='/arena'
+            className='flex items-center gap-2 rounded-lg bg-linear-to-r from-orange-500/10 to-rose-500/10 px-3 py-2 text-sm font-medium text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/20'
+          >
+            <Swords className='h-4 w-4' />
+            Enter Arena
+          </Link>
+        </div>
+
         {chats.length === 0 ? (
           <div className='flex flex-col items-center justify-center gap-2 px-4 py-16 text-center'>
             <MessageSquare className='text-muted-foreground/30 h-6 w-6' />
