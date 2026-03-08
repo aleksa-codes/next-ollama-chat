@@ -2,78 +2,30 @@
 
 import { ChatInput } from '@/components/chat-input';
 import { ChatMessageItem } from '@/components/chat-message';
-import { ChatSidebar, type Chat } from '@/components/chat-sidebar';
+import { ChatSidebar } from '@/components/chat-sidebar';
 import { ModelSelector } from '@/components/model-selector';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sidebar, SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useOllamaModels } from '@/hooks/use-ollama-models';
 import type { ChatUIMessage } from '@/lib/ai';
+import { generateTitle, type Chat } from '@/lib/chat';
+import {
+  deleteChat as deletePersistedChat,
+  fetchChatState,
+  saveSelectedModel as persistSelectedModel,
+  saveChat,
+} from '@/lib/chat-api';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useEffect, useRef, useState } from 'react';
 
-const STORAGE_KEY = 'ollama-chat-history';
-const MODEL_STORAGE_KEY = 'ollama-selected-model';
-
 const SUGGESTED_PROMPTS = [
-  { icon: '🚀', text: 'Explain quantum computing in simple terms' },
-  { icon: '✍️', text: 'Write a short poem about the ocean' },
-  { icon: '🧮', text: 'Help me debug a React component' },
-  { icon: '🌍', text: 'What are the best practices for REST APIs?' },
+  { icon: '\u{1F680}', text: 'Explain quantum computing in simple terms' },
+  { icon: '\u{270D}\u{FE0F}', text: 'Write a short poem about the ocean' },
+  { icon: '\u{1F9EE}', text: 'Help me debug a React component' },
+  { icon: '\u{1F30D}', text: 'What are the best practices for REST APIs?' },
 ];
-
-function loadChats(): Chat[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveChats(chats: Chat[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-function loadSelectedModel(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return localStorage.getItem(MODEL_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function saveSelectedModel(model: string) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(MODEL_STORAGE_KEY, model);
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-function generateTitle(messages: ChatUIMessage[]): string {
-  const firstUserMessage = messages.find((m) => m.role === 'user');
-  if (firstUserMessage) {
-    const text = firstUserMessage.parts
-      .filter((p) => p.type === 'text')
-      .map((p) => (p as { type: 'text'; text: string }).text)
-      .join('');
-    if (text.length > 30) {
-      return text.substring(0, 30) + '...';
-    }
-    return text || 'New Chat';
-  }
-  return 'New Chat';
-}
 
 interface ImageFile {
   dataUrl: string;
@@ -87,54 +39,90 @@ export default function ChatPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [isLoadingState, setIsLoadingState] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasLoadedStateRef = useRef(false);
+  const skipNextMessageSyncRef = useRef(false);
 
   const { messages, sendMessage, status, stop, setMessages, regenerate } = useChat<ChatUIMessage>({
     transport: new DefaultChatTransport({ api: '/api/ollama/chat' }),
   });
 
-  // Load chats and saved model on mount
   useEffect(() => {
-    const loadedChats = loadChats();
-    setChats(loadedChats);
-    const savedModel = loadSelectedModel();
-    if (savedModel) {
-      setSelectedModel(savedModel);
-    } else if (models.length > 0 && loadedChats.length > 0) {
-      setSelectedModel(loadedChats[0].model);
+    let isCancelled = false;
+
+    async function loadState() {
+      try {
+        const state = await fetchChatState();
+
+        if (isCancelled) {
+          return;
+        }
+
+        setChats(state.chats);
+        if (state.selectedModel) {
+          setSelectedModel(state.selectedModel);
+        }
+      } catch (error) {
+        console.error('[Chat] Failed to load persisted state:', error);
+      } finally {
+        if (!isCancelled) {
+          hasLoadedStateRef.current = true;
+          setIsLoadingState(false);
+        }
+      }
     }
-  }, [models]);
 
-  // Save chats when they change
+    void loadState();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
-    saveChats(chats);
-  }, [chats]);
+    if (!hasLoadedStateRef.current || selectedModel || models.length === 0) {
+      return;
+    }
 
-  const handleModelChange = (model: string) => {
-    setSelectedModel(model);
-    saveSelectedModel(model);
-  };
+    setSelectedModel(chats[0]?.model ?? models[0].name);
+  }, [chats, models, selectedModel]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const effectiveModel = selectedModel || (models.length > 0 ? models[0].name : '');
-  const selectedModelData = models.find((m) => m.name === effectiveModel);
+  const selectedModelData = models.find((model) => model.name === effectiveModel);
   const supportsThinking = selectedModelData?.supportsThinking ?? false;
   const supportsVision = selectedModelData?.supportsVision ?? false;
 
   const hasMessages = messages.length > 0;
   const isStreaming = status === 'streaming' || status === 'submitted';
-  const isEmptyStart = !hasMessages && !isCreatingChat;
+  const isEmptyStart = !isLoadingState && !hasMessages && !isCreatingChat;
+
+  const updateSelectedModel = async (model: string) => {
+    setSelectedModel(model);
+
+    if (activeChatId) {
+      const updatedAt = Date.now();
+
+      setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, model, updatedAt } : chat)));
+    }
+
+    try {
+      await persistSelectedModel(model);
+    } catch (error) {
+      console.error('[Chat] Failed to persist selected model:', error);
+    }
+  };
 
   const handleSend = (content: string, images?: ImageFile[]) => {
     const modelToUse = effectiveModel;
-    if (!modelToUse) return;
+    if (!modelToUse) {
+      return;
+    }
 
-    // Create chat if it doesn't exist
-    /* eslint-disable react-hooks/purity */
     if (!activeChatId) {
       const chatId = crypto.randomUUID();
       const timestamp = Date.now();
@@ -144,19 +132,20 @@ export default function ChatPage() {
         messages: [],
         model: modelToUse,
         createdAt: timestamp,
+        updatedAt: timestamp,
       };
+
       setChats((prev) => [newChat, ...prev]);
-      setActiveChatId(newChat.id);
+      setActiveChatId(chatId);
       setIsCreatingChat(true);
     }
-    /* eslint-enable react-hooks/purity */
 
     const parts: (
       | { type: 'text'; text: string }
       | { type: 'file'; url: string; mediaType: string; filename?: string }
     )[] = [{ type: 'text', text: content }];
 
-    if (images && images.length > 0) {
+    if (images?.length) {
       for (const image of images) {
         parts.push({
           type: 'file',
@@ -169,69 +158,133 @@ export default function ChatPage() {
 
     sendMessage(
       { parts },
-      { body: { model: modelToUse, supportsThinking, supportsVision: supportsVision && images && images.length > 0 } },
+      {
+        body: {
+          model: modelToUse,
+          supportsThinking,
+          supportsVision: supportsVision && Boolean(images?.length),
+        },
+      },
     );
   };
 
-  const handleSuggestedPrompt = (text: string) => {
-    const modelToUse = effectiveModel;
-    if (!modelToUse) return;
-    handleSend(text);
-  };
-
   const handleSubmitWithImages = (images?: ImageFile[]) => {
-    if (!input.trim() || !effectiveModel) return;
+    if (!input.trim() || !effectiveModel) {
+      return;
+    }
+
     handleSend(input.trim(), images);
     setInput('');
   };
 
   const handleNewChat = () => {
     setActiveChatId(null);
+    skipNextMessageSyncRef.current = true;
     setMessages([]);
     setInput('');
     setIsCreatingChat(false);
   };
 
   const handleSelectChat = (id: string) => {
-    const chat = chats.find((c) => c.id === id);
-    if (chat) {
-      setActiveChatId(id);
-      setMessages(chat.messages);
-      setSelectedModel(chat.model);
-      setIsCreatingChat(chat.messages.length > 0);
+    const chat = chats.find((candidate) => candidate.id === id);
+    if (!chat) {
+      return;
     }
+
+    setActiveChatId(chat.id);
+    skipNextMessageSyncRef.current = true;
+    setMessages(chat.messages);
+    setSelectedModel(chat.model);
+    setIsCreatingChat(chat.messages.length > 0);
+
+    void persistSelectedModel(chat.model).catch((error) => {
+      console.error('[Chat] Failed to persist selected model:', error);
+    });
   };
 
   const handleDeleteChat = (id: string) => {
-    const remaining = chats.filter((c) => c.id !== id);
-    setChats(remaining);
+    const remaining = chats.filter((chat) => chat.id !== id);
 
-    if (activeChatId === id) {
-      if (remaining.length > 0) {
-        setActiveChatId(remaining[0].id);
-        setMessages(remaining[0].messages);
-        setSelectedModel(remaining[0].model);
-        setIsCreatingChat(remaining[0].messages.length > 0);
-      } else {
-        setActiveChatId(null);
-        setMessages([]);
-        setSelectedModel('');
-        setIsCreatingChat(false);
-      }
+    setChats(remaining);
+    void deletePersistedChat(id).catch((error) => {
+      console.error('[Chat] Failed to delete chat:', error);
+    });
+
+    if (activeChatId !== id) {
+      return;
     }
+
+    stop();
+
+    if (remaining.length > 0) {
+      const nextChat = remaining[0];
+
+      setActiveChatId(nextChat.id);
+      skipNextMessageSyncRef.current = true;
+      setMessages(nextChat.messages);
+      setSelectedModel(nextChat.model);
+      setIsCreatingChat(nextChat.messages.length > 0);
+      void persistSelectedModel(nextChat.model).catch((error) => {
+        console.error('[Chat] Failed to persist selected model:', error);
+      });
+      return;
+    }
+
+    setActiveChatId(null);
+    skipNextMessageSyncRef.current = true;
+    setMessages([]);
+    setIsCreatingChat(false);
   };
 
-  // Update chat with messages when they change
   useEffect(() => {
-    if (activeChatId && messages.length > 0) {
-      const title = generateTitle(messages);
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === activeChatId ? { ...chat, title, messages, model: effectiveModel || chat.model } : chat,
-        ),
-      );
+    if (skipNextMessageSyncRef.current) {
+      skipNextMessageSyncRef.current = false;
+      return;
     }
+
+    if (!activeChatId || messages.length === 0) {
+      return;
+    }
+
+    const title = generateTitle(messages);
+    const updatedAt = Date.now();
+
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === activeChatId
+          ? {
+              ...chat,
+              title,
+              messages,
+              model: effectiveModel || chat.model,
+              updatedAt,
+            }
+          : chat,
+      ),
+    );
+    setIsCreatingChat(true);
   }, [messages, activeChatId, effectiveModel]);
+
+  useEffect(() => {
+    if (!hasLoadedStateRef.current || !activeChatId) {
+      return;
+    }
+
+    const activeChat = chats.find((chat) => chat.id === activeChatId);
+    if (!activeChat || activeChat.messages.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void saveChat(activeChat).catch((error) => {
+        console.error('[Chat] Failed to persist chat:', error);
+      });
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeChatId, chats]);
 
   return (
     <TooltipProvider>
@@ -246,17 +299,15 @@ export default function ChatPage() {
           />
         </Sidebar>
         <SidebarInset className='flex h-screen flex-col overflow-hidden'>
-          {/* Header */}
           <header className='flex h-12 shrink-0 items-center gap-2 px-3'>
             <SidebarTrigger className='h-7 w-7 rounded-lg' />
-            <ModelSelector value={selectedModel} onValueChange={handleModelChange} />
+            <ModelSelector value={selectedModel} onValueChange={updateSelectedModel} />
           </header>
 
           {isEmptyStart ? (
-            /* Empty State — centered input like ChatGPT */
             <div className='flex flex-1 flex-col items-center justify-center px-4 pb-8'>
               <h1 className='text-foreground mb-8 text-3xl font-medium tracking-tight'>
-                {effectiveModel ? `What can I help with?` : "What's on your mind?"}
+                {effectiveModel ? 'What can I help with?' : "What's on your mind?"}
               </h1>
 
               <div className='w-full max-w-2xl'>
@@ -266,7 +317,7 @@ export default function ChatPage() {
                   onSubmit={handleSubmitWithImages}
                   isStreaming={isStreaming}
                   stop={stop}
-                  disabled={!effectiveModel}
+                  disabled={!effectiveModel || isLoadingState}
                   placeholder={effectiveModel ? 'Ask anything...' : 'Select a model first...'}
                   supportsVision={supportsVision}
                 />
@@ -274,10 +325,10 @@ export default function ChatPage() {
 
               {effectiveModel && (
                 <div className='mt-4 grid w-full max-w-2xl grid-cols-2 gap-3'>
-                  {SUGGESTED_PROMPTS.map((prompt, i) => (
+                  {SUGGESTED_PROMPTS.map((prompt) => (
                     <button
-                      key={i}
-                      onClick={() => handleSuggestedPrompt(prompt.text)}
+                      key={prompt.text}
+                      onClick={() => handleSend(prompt.text)}
                       className='group border-border/40 hover:bg-accent bg-muted/30 hover:border-primary/30 flex items-start gap-3 rounded-2xl border px-5 py-4 text-left transition-all hover:shadow-sm'
                     >
                       <span className='text-2xl leading-none'>{prompt.icon}</span>
@@ -292,18 +343,17 @@ export default function ChatPage() {
               <p className='text-muted-foreground/60 mt-4 text-xs'>Running locally · Powered by Ollama</p>
             </div>
           ) : (
-            /* Chat with messages */
             <>
               <div className='min-h-0 flex-1'>
                 <ScrollArea className='h-full'>
                   <div className='mx-auto w-full max-w-3xl py-4'>
-                    {messages.map((message, idx) => (
+                    {messages.map((message, index) => (
                       <ChatMessageItem
                         key={message.id}
                         message={message}
                         isStreaming={isStreaming && message.role === 'assistant'}
                         regenerate={
-                          message.role === 'assistant' && idx === messages.length - 1
+                          message.role === 'assistant' && index === messages.length - 1
                             ? () =>
                                 regenerate({ body: { model: effectiveModel, supportsThinking, supportsVision: false } })
                             : undefined
@@ -332,7 +382,7 @@ export default function ChatPage() {
                     onSubmit={handleSubmitWithImages}
                     isStreaming={isStreaming}
                     stop={stop}
-                    disabled={!effectiveModel}
+                    disabled={!effectiveModel || isLoadingState}
                     placeholder={
                       effectiveModel ? `Message ${effectiveModel.split(':')[0]}...` : 'Select a model first...'
                     }

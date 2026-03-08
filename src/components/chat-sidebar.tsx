@@ -20,18 +20,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import type { ChatUIMessage } from '@/lib/ai';
+import type { Chat } from '@/lib/chat';
 import { cn } from '@/lib/utils';
 import { MessageSquare, MoreHorizontal, PenSquare, Phone, Swords, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-
-export interface Chat {
-  id: string;
-  title: string;
-  messages: ChatUIMessage[];
-  model: string;
-  createdAt: number;
-}
 
 interface ChatSidebarProps {
   chats: Chat[];
