@@ -37,6 +37,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 The SQLite database is created automatically at `data/app.db` on first run.
 
+## Database migrations
+
+If you change the schema (add/remove fields or tables), generate and apply a new Drizzle migration:
+
+```bash
+bun run db:generate
+bun run db:migrate
+```
+
+> Note: The server runs `bun run db:migrate` automatically on startup, so you typically only need to run it manually when working on migrations.
+
 ## Scripts
 
 | Command               | Description                        |
