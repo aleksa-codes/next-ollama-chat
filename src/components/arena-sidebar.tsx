@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { useOllamaModels } from '@/hooks/use-ollama-models';
 import { ArenaMode } from '@/lib/arena';
+import { LocalModel } from '@/lib/local-ai';
 import { cn } from '@/lib/utils';
 import { Brain, Info, Play, RotateCcw, Sparkles } from 'lucide-react';
 import { useState } from 'react';
@@ -35,6 +35,7 @@ function parseParamSize(size: string): number {
 }
 
 interface ArenaSidebarProps {
+  models: LocalModel[];
   modes: ArenaMode[];
   selectedModeId: string;
   onModeSelect: (id: string) => void;
@@ -47,6 +48,7 @@ interface ArenaSidebarProps {
 }
 
 export function ArenaSidebar({
+  models,
   modes,
   selectedModeId,
   onModeSelect,
@@ -57,12 +59,11 @@ export function ArenaSidebar({
   onGenerate,
   isGenerating,
 }: ArenaSidebarProps) {
-  const { models } = useOllamaModels();
   const selectedMode = modes.find((m) => m.id === selectedModeId);
   const [presetsOpen, setPresetsOpen] = useState(false);
 
   return (
-    <div className='bg-sidebar/50 flex h-full w-80 flex-col border-r backdrop-blur-xl'>
+    <div className='bg-sidebar/50 flex h-full w-72 flex-col border-r backdrop-blur-xl xl:w-80'>
       <div className='flex h-14 shrink-0 items-center justify-between border-b px-4'>
         <h2 className='text-sm font-semibold tracking-tight'>Compare AI Models</h2>
         <Dialog>
@@ -114,43 +115,50 @@ export function ArenaSidebar({
           </h3>
           <ScrollArea className='-mr-3 min-h-0 flex-1 pr-3'>
             <div className='flex flex-col gap-2 pb-2'>
-              {[...models]
-                .sort((a, b) => {
-                  const paramDiff = parseParamSize(a.details.parameter_size) - parseParamSize(b.details.parameter_size);
-                  if (paramDiff !== 0) return paramDiff;
-                  return a.name.localeCompare(b.name);
-                })
-                .map((model) => {
-                  const isSelected = selectedModels.includes(model.name);
-                  return (
-                    <label
-                      key={model.name}
-                      className={cn(
-                        'hover:bg-muted/50 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2 transition-all',
-                        isSelected && 'border-primary/30 bg-primary/5',
-                      )}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => onModelToggle(model.name)}
-                        className={cn(isSelected && 'border-primary bg-primary text-primary-foreground')}
-                      />
-                      <div className='flex min-w-0 flex-1 flex-col wrap-break-word'>
-                        <span className='flex items-center gap-1.5 text-sm leading-tight font-medium break-all'>
-                          {model.name.split(':')[0]}
-                          {model.supportsThinking && <Brain className='h-3.5 w-3.5 shrink-0 text-purple-500' />}
-                        </span>
-                        <div className='text-muted-foreground mt-1 flex w-full flex-wrap items-center gap-1.5 text-xs opacity-80'>
-                          <span>{model.details.parameter_size}</span>
-                          <span>·</span>
-                          <span className='truncate'>{model.details.family}</span>
-                          <span>·</span>
-                          <span className='shrink-0'>{formatBytes(model.size)}</span>
+              {models.length === 0 ? (
+                <div className='text-muted-foreground rounded-lg border border-dashed p-3 text-xs'>
+                  No models found for the selected backend.
+                </div>
+              ) : (
+                [...models]
+                  .sort((a, b) => {
+                    const paramDiff =
+                      parseParamSize(a.details.parameter_size) - parseParamSize(b.details.parameter_size);
+                    if (paramDiff !== 0) return paramDiff;
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map((model) => {
+                    const isSelected = selectedModels.includes(model.name);
+                    return (
+                      <label
+                        key={model.name}
+                        className={cn(
+                          'hover:bg-muted/50 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2 transition-all',
+                          isSelected && 'border-primary/30 bg-primary/5',
+                        )}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => onModelToggle(model.name)}
+                          className={cn(isSelected && 'border-primary bg-primary text-primary-foreground')}
+                        />
+                        <div className='flex min-w-0 flex-1 flex-col wrap-break-word'>
+                          <span className='flex items-center gap-1.5 text-sm leading-tight font-medium break-all'>
+                            {model.name.split(':')[0]}
+                            {model.supportsThinking && <Brain className='h-3.5 w-3.5 shrink-0 text-purple-500' />}
+                          </span>
+                          <div className='text-muted-foreground mt-1 flex w-full flex-wrap items-center gap-1.5 text-xs opacity-80'>
+                            <span>{model.details.parameter_size}</span>
+                            <span>·</span>
+                            <span className='truncate'>{model.details.family}</span>
+                            <span>·</span>
+                            <span className='shrink-0'>{formatBytes(model.size)}</span>
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  );
-                })}
+                      </label>
+                    );
+                  })
+              )}
             </div>
           </ScrollArea>
         </section>

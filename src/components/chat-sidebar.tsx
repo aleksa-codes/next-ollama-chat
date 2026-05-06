@@ -1,6 +1,7 @@
 'use client';
 
 import { ModeToggle } from '@/components/mode-toggle';
+import { ProviderSelector } from '@/components/provider-selector';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +22,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import type { Chat } from '@/lib/chat';
+import type { LocalAIProvider } from '@/lib/local-ai';
 import { cn } from '@/lib/utils';
 import { MessageSquare, MoreHorizontal, PenSquare, Phone, Swords, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -28,17 +30,27 @@ import Link from 'next/link';
 interface ChatSidebarProps {
   chats: Chat[];
   activeChatId: string | null;
+  provider: LocalAIProvider | null;
+  onProviderChange: (provider: LocalAIProvider) => void;
   onNewChat: () => void;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string) => void;
 }
 
-export function ChatSidebar({ chats, activeChatId, onNewChat, onSelectChat, onDeleteChat }: ChatSidebarProps) {
+export function ChatSidebar({
+  chats,
+  activeChatId,
+  provider,
+  onProviderChange,
+  onNewChat,
+  onSelectChat,
+  onDeleteChat,
+}: ChatSidebarProps) {
   return (
     <Sidebar className='border-sidebar-border border-r'>
       <SidebarHeader className='px-3 py-3'>
         <div className='flex items-center justify-between'>
-          <span className='px-1 text-sm font-semibold tracking-tight'>Ollama Chat</span>
+          <span className='px-1 text-sm font-semibold tracking-tight'>Local Chat</span>
           <button
             className='text-muted-foreground hover:text-foreground flex h-7 w-7 items-center justify-center rounded-lg transition-colors'
             onClick={onNewChat}
@@ -120,9 +132,15 @@ export function ChatSidebar({ chats, activeChatId, onNewChat, onSelectChat, onDe
       </SidebarContent>
 
       <SidebarFooter className='px-3 py-3'>
-        <div className='flex items-center justify-between px-1'>
-          <span className='text-muted-foreground text-xs'>Theme</span>
-          <ModeToggle />
+        <div className='flex flex-col gap-3 px-1'>
+          <div>
+            <span className='text-muted-foreground mb-2 block text-xs'>Provider</span>
+            <ProviderSelector value={provider} onValueChange={onProviderChange} className='w-full' />
+          </div>
+          <div className='flex items-center justify-between'>
+            <span className='text-muted-foreground text-xs'>Theme</span>
+            <ModeToggle />
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

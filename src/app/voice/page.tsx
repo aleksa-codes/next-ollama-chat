@@ -3,7 +3,9 @@
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useOllamaModels } from '@/hooks/use-ollama-models';
+import { useLocalModels } from '@/hooks/use-local-models';
+import { useSelectedProvider } from '@/hooks/use-selected-provider';
+import { LOCAL_AI_PROVIDER_LABELS } from '@/lib/local-ai';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff, Monitor, MonitorOff, Phone, PhoneOff, StopCircle, Volume2, VolumeX } from 'lucide-react';
 import Link from 'next/link';
@@ -112,7 +114,8 @@ function CallOrb({ phase, micMuted }: { phase: CallPhase; micMuted: boolean }) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function VoicePage() {
-  const { models, loading } = useOllamaModels();
+  const { provider } = useSelectedProvider();
+  const { models, loading } = useLocalModels(provider);
 
   // ── Setup state ──
   const [selectedModel, setSelectedModel] = useState('');
@@ -172,6 +175,16 @@ export default function VoicePage() {
       selectedModelRef.current = sortedModels[0].name;
     }
   }, [sortedModels, selectedModel]);
+
+  useEffect(() => {
+    if (!selectedModel) {
+      return;
+    }
+
+    if (!sortedModels.some((model) => model.name === selectedModel)) {
+      setSelectedModel('');
+    }
+  }, [selectedModel, sortedModels]);
 
   useEffect(() => {
     selectedModelRef.current = selectedModel;
@@ -333,10 +346,10 @@ export default function VoicePage() {
           return { id: crypto.randomUUID(), role: m.role, parts };
         });
 
-        const response = await fetch('/api/ollama/voice', {
+        const response = await fetch('/api/voice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: selectedModelRef.current, messages: recentMsgs }),
+          body: JSON.stringify({ provider, model: selectedModelRef.current, messages: recentMsgs }),
           signal: abortRef.current.signal,
         });
 
@@ -679,7 +692,9 @@ export default function VoicePage() {
                 </div>
               ) : sortedModels.length === 0 ? (
                 <div className='border-border rounded-xl border p-4 text-center'>
-                  <p className='text-muted-foreground text-sm'>No models found. Is Ollama running?</p>
+                  <p className='text-muted-foreground text-sm'>
+                    No models found. Is {provider ? LOCAL_AI_PROVIDER_LABELS[provider] : '...'} running?
+                  </p>
                 </div>
               ) : (
                 <ScrollArea className='h-52 rounded-xl border'>

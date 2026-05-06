@@ -3,8 +3,8 @@
 import { ArenaPreview } from '@/components/arena-preview';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { OllamaModel } from '@/hooks/use-ollama-models';
 import { ArenaCompetitor, extractCode, formatDuration } from '@/lib/arena';
+import { LocalModel } from '@/lib/local-ai';
 import { Brain, ChevronDown, ChevronRight, Code2, Download, Eye, FileText, Loader2, SkipForward } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { codeToHtml } from 'shiki';
@@ -29,7 +29,7 @@ async function highlight(code: string, lang: string): Promise<string> {
 interface ArenaModelCardProps {
   competitor: ArenaCompetitor;
   mode: string;
-  model?: OllamaModel;
+  model?: LocalModel;
   onSkip?: () => void;
 }
 
@@ -97,78 +97,92 @@ export function ArenaModelCard({ competitor, mode, model, onSkip }: ArenaModelCa
   };
 
   return (
-    <div className='bg-card flex h-full flex-col overflow-hidden rounded-t-xl border shadow-sm'>
+    <div className='bg-card flex h-full flex-col overflow-hidden rounded-none border-0 shadow-none'>
       {/* Header */}
-      <div className='bg-muted/20 flex items-center justify-between border-b px-4 py-2'>
-        <div className='flex items-center gap-2'>
-          <h3 className='font-medium'>{competitor.id.split(':')[0]}</h3>
+      <div className='bg-muted/20 border-b px-3 py-2'>
+        <div className='flex h-10 items-center justify-between gap-2'>
+          <div className='min-w-0 flex-1'>
+            <h3
+              className='overflow-x-auto text-[clamp(1rem,1.15vw,1.5rem)] leading-tight font-semibold whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+              title={competitor.id.split(':')[0]}
+            >
+              {competitor.id.split(':')[0]}
+            </h3>
+          </div>
+
+          <div className='ml-2 flex shrink-0 items-center gap-1.5'>
+            <div className='bg-background flex items-center rounded-lg border p-0.5'>
+              <Button
+                variant='ghost'
+                size='sm'
+                className={`h-7 rounded-md px-1.5 text-xs md:px-2 ${view === 'preview' ? 'bg-muted shadow-sm' : ''}`}
+                onClick={() => setView('preview')}
+              >
+                <Eye className='h-3.5 w-3.5 sm:mr-1.5' />
+                <span className='hidden md:inline'>Preview</span>
+              </Button>
+              <Button
+                variant='ghost'
+                size='sm'
+                className={`h-7 rounded-md px-1.5 text-xs md:px-2 ${view === 'code' ? 'bg-muted shadow-sm' : ''}`}
+                onClick={() => setView('code')}
+              >
+                <Code2 className='h-3.5 w-3.5 sm:mr-1.5' />
+                <span className='hidden md:inline'>Code</span>
+              </Button>
+              <Button
+                variant='ghost'
+                size='sm'
+                className={`h-7 rounded-md px-1.5 text-xs md:px-2 ${view === 'raw' ? 'bg-muted shadow-sm' : ''}`}
+                onClick={() => setView('raw')}
+              >
+                <FileText className='h-3.5 w-3.5 sm:mr-1.5' />
+                <span className='hidden md:inline'>Raw</span>
+              </Button>
+            </div>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8'
+              onClick={handleDownload}
+              disabled={!competitor.code}
+            >
+              <Download className='h-4 w-4' />
+            </Button>
+          </div>
+        </div>
+
+        <div className='text-muted-foreground mt-1 flex h-7 items-center gap-2 overflow-x-auto text-xs whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'>
           {model?.supportsThinking && <Brain className='h-3.5 w-3.5 shrink-0 text-purple-500' />}
-          {model?.details?.parameter_size && (
-            <span className='text-muted-foreground text-xs'>{model.details.parameter_size}</span>
-          )}
-          {competitor.status === 'running' && <Loader2 className='text-muted-foreground h-3.5 w-3.5 animate-spin' />}
-          {competitor.status === 'done' && <span className='h-2 w-2 rounded-full bg-green-500' />}
-          {competitor.status === 'error' && <span className='bg-destructive h-2 w-2 rounded-full' />}
-          {competitor.status === 'skipped' && <span className='h-2 w-2 rounded-full bg-amber-500' />}
-          {competitor.status === 'running' && (
-            <span className='text-muted-foreground font-mono text-xs tabular-nums'>{formatDuration(elapsedMs)}</span>
+          {model?.details?.parameter_size && <span className='shrink-0'>{model.details.parameter_size}</span>}
+          {competitor.status === 'running' && <Loader2 className='h-3.5 w-3.5 shrink-0 animate-spin' />}
+          {competitor.status === 'done' && <span className='h-2 w-2 shrink-0 rounded-full bg-green-500' />}
+          {competitor.status === 'error' && <span className='bg-destructive h-2 w-2 shrink-0 rounded-full' />}
+          {competitor.status === 'skipped' && <span className='h-2 w-2 shrink-0 rounded-full bg-amber-500' />}
+          {((competitor.status === 'running' && elapsedMs > 0) ||
+            (competitor.status === 'done' && competitor.duration !== undefined) ||
+            (competitor.status === 'skipped' && competitor.duration !== undefined)) && (
+            <span className='shrink-0 font-mono tabular-nums'>
+              {formatDuration(
+                competitor.status === 'running'
+                  ? elapsedMs
+                  : competitor.duration !== undefined
+                    ? competitor.duration
+                    : 0,
+              )}
+            </span>
           )}
           {competitor.status === 'running' && onSkip && (
             <Button
               variant='ghost'
               size='sm'
-              className='h-6 gap-1 px-2 text-xs text-amber-500 hover:text-amber-600'
+              className='h-6 shrink-0 gap-1 px-2 text-xs text-amber-500 hover:text-amber-600'
               onClick={onSkip}
             >
               <SkipForward className='h-3.5 w-3.5' />
-              Skip
+              <span>Skip</span>
             </Button>
           )}
-          {competitor.status === 'done' && competitor.duration !== undefined && (
-            <span className='text-muted-foreground font-mono text-xs tabular-nums'>
-              {formatDuration(competitor.duration)}
-            </span>
-          )}
-          {competitor.status === 'skipped' && competitor.duration !== undefined && (
-            <span className='text-muted-foreground font-mono text-xs tabular-nums'>
-              {formatDuration(competitor.duration)}
-            </span>
-          )}
-        </div>
-
-        <div className='flex items-center gap-1.5'>
-          <div className='bg-background flex items-center rounded-lg border p-0.5'>
-            <Button
-              variant='ghost'
-              size='sm'
-              className={`h-7 rounded-md px-2.5 text-xs ${view === 'preview' ? 'bg-muted shadow-sm' : ''}`}
-              onClick={() => setView('preview')}
-            >
-              <Eye className='mr-1.5 h-3.5 w-3.5' />
-              Preview
-            </Button>
-            <Button
-              variant='ghost'
-              size='sm'
-              className={`h-7 rounded-md px-2.5 text-xs ${view === 'code' ? 'bg-muted shadow-sm' : ''}`}
-              onClick={() => setView('code')}
-            >
-              <Code2 className='mr-1.5 h-3.5 w-3.5' />
-              Code
-            </Button>
-            <Button
-              variant='ghost'
-              size='sm'
-              className={`h-7 rounded-md px-2.5 text-xs ${view === 'raw' ? 'bg-muted shadow-sm' : ''}`}
-              onClick={() => setView('raw')}
-            >
-              <FileText className='mr-1.5 h-3.5 w-3.5' />
-              Raw
-            </Button>
-          </div>
-          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={handleDownload} disabled={!competitor.code}>
-            <Download className='h-4 w-4' />
-          </Button>
         </div>
       </div>
 
@@ -176,7 +190,7 @@ export function ArenaModelCard({ competitor, mode, model, onSkip }: ArenaModelCa
       <div className='bg-background relative flex min-h-0 flex-1 flex-col overflow-hidden'>
         {/* Reasoning Section */}
         {competitor.reasoning && (
-          <div className='border-muted bg-muted m-2 rounded-lg border'>
+          <div className='border-muted bg-muted m-1.5 rounded-lg border'>
             <button
               onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
               className='text-foreground hover:bg-muted/50 flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium transition-colors'

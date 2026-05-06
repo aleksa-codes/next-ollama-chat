@@ -2,11 +2,18 @@
 
 ## Project Overview
 
-This is a **local AI chat application** powered by [Ollama](https://ollama.com). It provides three interfaces for interacting with locally-running LLMs:
+This is a **local AI chat application** that supports **two local inference backends**:
+
+- **Ollama** (native Ollama API + capability enrichment)
+- **oMLX** (OpenAI-compatible API)
+
+It provides three interfaces for interacting with local models:
 
 - **Chat** (`/`) - multi-turn chat with history, image attachments, markdown/code rendering, and per-chat model selection
-- **Arena** (`/arena`) - side-by-side model comparison; the same prompt is sent to two models simultaneously
+- **Arena** (`/arena`) - model comparison view; the same prompt is sent to selected models
 - **Voice** (`/voice`) - real-time voice call using Web Speech API (STT + TTS) with optional screen share for vision-capable models
+
+Provider selection is **global** and is controlled from **one place**: the left sidebar footer (above theme toggle).
 
 ## Core Architecture
 
@@ -14,9 +21,10 @@ This is a **local AI chat application** powered by [Ollama](https://ollama.com).
 
 - **Next.js 16** with App Router (`src/app/`)
 - **React 19.2** with **React Compiler** enabled (`reactCompiler: true` in `next.config.ts`)
-- **Vercel AI SDK** (`ai`, `@ai-sdk/react`) - `useChat` hook on the client
-- **ai-sdk-ollama** ([repo](https://github.com/jagreehal/ai-sdk-ollama)) - Ollama provider for the AI SDK; also provides `streamText` and `createOllama`
-- **SQLite** + **Drizzle ORM** - local persistence for chats and user preferences
+- **Vercel AI SDK** (`ai`, `@ai-sdk/react`) - `useChat` hook + streaming server helpers
+- **ai-sdk-ollama** - Ollama provider integration
+- **@ai-sdk/openai-compatible** - oMLX integration through OpenAI-compatible endpoints
+- **SQLite** + **Drizzle ORM** - local persistence for chats and preferences
 - **Tailwind CSS v4** with OKLCH color system and CSS variables
 - **shadcn/ui** ("new-york" style) component library
 - **TypeScript** with strict mode
@@ -27,9 +35,10 @@ This is a **local AI chat application** powered by [Ollama](https://ollama.com).
 
 - `components.json` - shadcn/ui config with path aliases
 - `drizzle.config.ts` - Drizzle Kit configuration for the local SQLite database
-- `next.config.ts` - React Compiler enabled, `better-sqlite3` externalized for the server runtime
+- `next.config.ts` - React Compiler enabled, `better-sqlite3` externalized for server runtime
 - `tsconfig.json` - path alias `@/*` -> `./src/*`
 - `.prettierrc` - import organization + Tailwind class sorting, 120 char line width, single quotes
+- `.env` - `OMLX_API_KEY` and optional `OMLX_BASE_URL`
 
 ## Project Structure
 
@@ -43,19 +52,21 @@ src/
 │   │   └── page.tsx
 │   ├── voice/
 │   │   └── page.tsx
+│   ├── api/chat/route.ts
+│   ├── api/generate/route.ts
+│   ├── api/models/route.ts
+│   ├── api/voice/route.ts
 │   ├── api/chat-state/route.ts
 │   ├── api/chats/[chatId]/route.ts
 │   ├── api/preferences/model/route.ts
-│   └── api/ollama/
-│       ├── chat/route.ts
-│       ├── generate/route.ts
-│       ├── models/route.ts
-│       └── voice/route.ts
+│   ├── api/preferences/provider/route.ts
+│   └── api/ollama/             # legacy compatibility routes
 ├── components/
 │   ├── ui/
 │   ├── chat-input.tsx
 │   ├── chat-message.tsx
 │   ├── chat-sidebar.tsx
+│   ├── provider-selector.tsx
 │   ├── model-selector.tsx
 │   ├── arena-*.tsx
 │   ├── code-block.tsx
@@ -63,7 +74,9 @@ src/
 │   ├── mode-toggle.tsx
 │   └── theme-provider.tsx
 ├── hooks/
-│   ├── use-ollama-models.ts
+│   ├── use-local-models.ts
+│   ├── use-selected-provider.ts
+│   ├── use-ollama-models.ts    # compatibility wrapper
 │   ├── use-speech.ts
 │   └── use-mobile.ts
 └── lib/
@@ -71,6 +84,8 @@ src/
     ├── arena.ts
     ├── chat-api.ts
     ├── chat-store.ts
+    ├── local-ai.ts
+    ├── model-provider.ts
     ├── db/
     │   ├── index.ts
     │   └── schema.ts
@@ -79,60 +94,83 @@ src/
 
 ## API Routes
 
-### `POST /api/ollama/chat`
+### Canonical Provider-Aware Routes
 
-Streams multi-turn chat via `streamText` + `toUIMessageStreamResponse`. Accepts `{ model, messages, supportsThinking }`. Supports vision via `file` parts in messages.
+### `POST /api/chat`
 
-### `POST /api/ollama/generate`
+Streams multi-turn chat via `streamText` + `toUIMessageStreamResponse`.
+Accepts `{ provider, model, messages, supportsThinking }`.
 
-Single-shot generation for the arena. Accepts `{ model, prompt, system }`, returns a plain text stream.
+### `POST /api/generate`
 
-### `GET /api/ollama/models`
+Single-shot streaming generation for Arena.
+Accepts `{ provider, model, prompt, mode, supportsThinking }`.
 
-Fetches all local Ollama models, enriches each with `supportsVision` and `supportsThinking` flags via the Ollama `/api/show` endpoint.
+### `GET /api/models`
 
-### `POST /api/ollama/voice`
+Lists models for selected provider (`?provider=ollama|omlx`) and normalizes model metadata:
 
-Streams a voice response as plain text (`toTextStreamResponse`). Uses a conversation-optimized system prompt. Accepts `{ model, messages }`, where messages may include `file` parts (screen-share screenshots).
+- `supportsVision`
+- `supportsThinking`
+- `details.parameter_size`
+- `size`
 
-### `GET /api/chat-state`
+For oMLX, the route combines `/v1/models` + `/v1/models/status` so size and thinking defaults are accurate.
 
-Returns the persisted chats and globally selected model from SQLite for the chat page bootstrap.
+### `POST /api/voice`
 
-### `PUT` / `DELETE /api/chats/[chatId]`
+Streams voice response as plain text (`toTextStreamResponse`).
+Accepts `{ provider, model, messages }`.
 
-Upserts or deletes a chat record in SQLite. Chats store the full `UIMessage[]` payload as JSON.
+### State & Preferences
 
-### `PUT /api/preferences/model`
+- `GET /api/chat-state` returns chats + `selectedModel` + `selectedProvider`
+- `PUT /DELETE /api/chats/[chatId]` upserts/deletes chat rows
+- `PUT /api/preferences/model` persists selected model
+- `GET|PUT /api/preferences/provider` reads/writes global provider
 
-Persists the globally selected model in SQLite.
+### Legacy Compatibility Routes
+
+`/api/ollama/*` routes remain in the codebase for compatibility, but UI uses canonical `/api/*` routes.
 
 ## Key Patterns
 
-### Model Capability Detection
+### Provider Selection
 
-`OllamaModel` (from `use-ollama-models.ts`) exposes `supportsVision?: boolean` and `supportsThinking?: boolean`. Always check these before enabling vision UI or thinking mode.
+- Provider is global (`ollama` or `omlx`).
+- UI control lives only in sidebar footer in `chat-sidebar.tsx`.
+- State is persisted in SQLite preference key `selected-provider`.
+
+### Model Loading
+
+- Use `useLocalModels(provider)` for model lists.
+- `useOllamaModels()` exists only as a compatibility wrapper; do not build new features on it.
+
+### Provider Resolution
+
+- `src/lib/local-ai.ts` contains provider types/constants.
+- `src/lib/model-provider.ts` maps `{ provider, model }` to a language model instance.
+  - Ollama: `createOllama()`
+  - oMLX: `createOpenAICompatible({ baseURL, apiKey })`
 
 ### Image / Vision Messages
 
-Images are passed as `{ type: 'file', url: dataUrl, mediaType: 'image/jpeg' }` parts alongside `text` parts in a `UIMessage`. `convertToModelMessages` from the AI SDK converts these for Ollama automatically.
+Images are passed as `{ type: 'file', url: dataUrl, mediaType: 'image/jpeg' }` parts.
+`convertToModelMessages` handles conversion for both providers.
 
 ### Chat Persistence
 
-Chat history and the selected model are stored in SQLite at `data/app.db`. Keep persistence logic centralized in `src/lib/chat-store.ts` and `src/lib/db/`.
+Chat history + selected model + selected provider are stored in SQLite at `data/app.db`.
+Keep persistence logic centralized in `src/lib/chat-store.ts` and `src/lib/db/`.
 
 ### Voice Architecture
 
 `src/app/voice/page.tsx` is a single client component managing:
 
-- `SpeechRecognition` in continuous mode - submits after 1500 ms of silence
+- `SpeechRecognition` continuous mode (submits after 1500 ms silence)
 - TTS queue via `SpeechSynthesisUtterance` with sentence-level streaming
-- Screen share via `getDisplayMedia` - screenshot captured on the first spoken word, attached as a vision part
-- Async state in `useRef` to avoid stale closures in event callbacks
-
-### Streaming in Voice
-
-The voice route returns `toTextStreamResponse()` (plain text, not a UI message stream). The page reads chunks and feeds a sentence buffer into the TTS queue for low-latency speech output.
+- Optional screen share via `getDisplayMedia`
+- `useRef`-based async state to avoid stale closures
 
 ## Development Workflows
 
@@ -150,9 +188,13 @@ bun run db:migrate  # Apply Drizzle migrations
 bun run db:studio   # Open Drizzle Studio
 ```
 
-**Ollama must be running locally** (`ollama serve`) with at least one model pulled.
+### Local Backend Requirements
 
-**SQLite DB is auto-created** at `data/app.db` when the app or persistence routes run.
+- Ollama: run `ollama serve` and pull at least one model
+- oMLX: run server and set `OMLX_API_KEY` (required in this setup)
+- Optional: set `OMLX_BASE_URL` (default `http://localhost:8000/v1`)
+
+SQLite DB is auto-created at `data/app.db`.
 
 ### Adding shadcn/ui Components
 
@@ -165,19 +207,19 @@ Components install to `src/components/ui/`. Never edit them directly.
 
 ## Styling Conventions
 
-- Tailwind utility classes exclusively - no inline styles or raw CSS
-- CSS variable tokens only, no hex/rgb (e.g. `bg-background`, `text-foreground`, `text-muted-foreground`)
-- Dark mode via `.dark` class + `dark:*` utilities
+- Tailwind utility classes only (no inline styles or raw CSS)
+- CSS variable tokens only (no hex/rgb)
+- Dark mode via `.dark` + `dark:*`
 - Merge classes with `cn()` from `@/lib/utils`
-- 120 char line width, single quotes, Tailwind classes auto-sorted by Prettier
+- 120 char line width, single quotes, Tailwind class sort via Prettier
 
 ## What to Avoid
 
-- **Don't** add `'use client'` unnecessarily - API routes and utility files are server-only
-- **Don't** modify `src/components/ui/` directly - extend in custom components
-- **Don't** use hex/rgb colors - use CSS variable tokens
-- **Don't** use `npm install` - use `bun add`
-- **Don't** duplicate model-fetching logic - always use the `useOllamaModels` hook
-- **Don't** add new Ollama API routes outside `/api/ollama/` to keep the proxy layer consistent
-- **Don't** bypass `src/lib/chat-store.ts` or `src/lib/db/` for chat persistence - keep SQLite access centralized
-- **Don't** skip formatting - run `bun run format` before committing
+- **Don't** add `'use client'` unnecessarily in server files
+- **Don't** modify `src/components/ui/` directly
+- **Don't** use hex/rgb colors
+- **Don't** use `npm install`; use `bun add`
+- **Don't** duplicate model-loading logic; use `useLocalModels`
+- **Don't** bypass `src/lib/chat-store.ts` or `src/lib/db/` for persistence
+- **Don't** add new provider-specific frontend paths when unified `/api/*` routes already cover the use case
+- **Don't** skip formatting/linting before commit

@@ -7,15 +7,17 @@ import { ModelSelector } from '@/components/model-selector';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sidebar, SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useOllamaModels } from '@/hooks/use-ollama-models';
+import { useLocalModels } from '@/hooks/use-local-models';
 import type { ChatUIMessage } from '@/lib/ai';
 import { generateTitle, type Chat } from '@/lib/chat';
 import {
   deleteChat as deletePersistedChat,
   fetchChatState,
   saveSelectedModel as persistSelectedModel,
+  saveSelectedProvider as persistSelectedProvider,
   saveChat,
 } from '@/lib/chat-api';
+import { DEFAULT_LOCAL_AI_PROVIDER, LOCAL_AI_PROVIDER_LABELS, LocalAIProvider } from '@/lib/local-ai';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useEffect, useRef, useState } from 'react';
@@ -33,7 +35,8 @@ interface ImageFile {
 }
 
 export default function ChatPage() {
-  const { models } = useOllamaModels();
+  const [provider, setProvider] = useState<LocalAIProvider | null>(null);
+  const { models } = useLocalModels(provider);
   const [selectedModel, setSelectedModel] = useState('');
   const [input, setInput] = useState('');
   const [chats, setChats] = useState<Chat[]>([]);
@@ -45,7 +48,7 @@ export default function ChatPage() {
   const skipNextMessageSyncRef = useRef(false);
 
   const { messages, sendMessage, status, stop, setMessages, regenerate } = useChat<ChatUIMessage>({
-    transport: new DefaultChatTransport({ api: '/api/ollama/chat' }),
+    transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
 
   useEffect(() => {
@@ -60,6 +63,7 @@ export default function ChatPage() {
         }
 
         setChats(state.chats);
+        setProvider(state.selectedProvider ?? DEFAULT_LOCAL_AI_PROVIDER);
         if (state.selectedModel) {
           setSelectedModel(state.selectedModel);
         }
@@ -81,11 +85,25 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!hasLoadedStateRef.current || selectedModel || models.length === 0) {
+    if (!hasLoadedStateRef.current) {
       return;
     }
 
-    setSelectedModel(chats[0]?.model ?? models[0].name);
+    if (models.length === 0) {
+      if (selectedModel) {
+        setSelectedModel('');
+      }
+      return;
+    }
+
+    if (selectedModel && models.some((model) => model.name === selectedModel)) {
+      return;
+    }
+
+    const currentChatModel = chats[0]?.model;
+    const nextModel =
+      currentChatModel && models.some((model) => model.name === currentChatModel) ? currentChatModel : models[0].name;
+    setSelectedModel(nextModel);
   }, [chats, models, selectedModel]);
 
   useEffect(() => {
@@ -114,6 +132,15 @@ export default function ChatPage() {
       await persistSelectedModel(model);
     } catch (error) {
       console.error('[Chat] Failed to persist selected model:', error);
+    }
+  };
+
+  const updateProvider = async (nextProvider: LocalAIProvider) => {
+    setProvider(nextProvider);
+    try {
+      await persistSelectedProvider(nextProvider);
+    } catch (error) {
+      console.error('[Chat] Failed to persist selected provider:', error);
     }
   };
 
@@ -160,6 +187,7 @@ export default function ChatPage() {
       { parts },
       {
         body: {
+          provider,
           model: modelToUse,
           supportsThinking,
           supportsVision: supportsVision && Boolean(images?.length),
@@ -293,6 +321,8 @@ export default function ChatPage() {
           <ChatSidebar
             chats={chats}
             activeChatId={activeChatId}
+            provider={provider}
+            onProviderChange={updateProvider}
             onNewChat={handleNewChat}
             onSelectChat={handleSelectChat}
             onDeleteChat={handleDeleteChat}
@@ -301,7 +331,7 @@ export default function ChatPage() {
         <SidebarInset className='flex h-screen flex-col overflow-hidden'>
           <header className='flex h-12 shrink-0 items-center gap-2 px-3'>
             <SidebarTrigger className='h-7 w-7 rounded-lg' />
-            <ModelSelector value={selectedModel} onValueChange={updateSelectedModel} />
+            <ModelSelector provider={provider} value={selectedModel} onValueChange={updateSelectedModel} />
           </header>
 
           {isEmptyStart ? (
@@ -340,7 +370,9 @@ export default function ChatPage() {
                 </div>
               )}
 
-              <p className='text-muted-foreground/60 mt-4 text-xs'>Running locally · Powered by Ollama</p>
+              <p className='text-muted-foreground/60 mt-4 text-xs'>
+                Running locally · Powered by {provider ? LOCAL_AI_PROVIDER_LABELS[provider] : '...'}
+              </p>
             </div>
           ) : (
             <>
@@ -355,7 +387,9 @@ export default function ChatPage() {
                         regenerate={
                           message.role === 'assistant' && index === messages.length - 1
                             ? () =>
-                                regenerate({ body: { model: effectiveModel, supportsThinking, supportsVision: false } })
+                                regenerate({
+                                  body: { provider, model: effectiveModel, supportsThinking, supportsVision: false },
+                                })
                             : undefined
                         }
                       />

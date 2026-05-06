@@ -3,8 +3,10 @@ import { desc, eq } from 'drizzle-orm';
 import type { Chat } from '@/lib/chat';
 import { db, ensureDatabase } from '@/lib/db';
 import { chatsTable, preferencesTable } from '@/lib/db/schema';
+import { LocalAIProvider, resolveLocalAIProvider } from '@/lib/local-ai';
 
 const SELECTED_MODEL_PREFERENCE_KEY = 'selected-model';
+const SELECTED_PROVIDER_PREFERENCE_KEY = 'selected-provider';
 
 function parseMessages(messages: string): Chat['messages'] {
   try {
@@ -103,4 +105,40 @@ export function setSelectedModel(selectedModel: string | null) {
     .run();
 
   return selectedModel;
+}
+
+export function getSelectedProvider(): LocalAIProvider {
+  ensureDatabase();
+
+  const [preference] = db
+    .select()
+    .from(preferencesTable)
+    .where(eq(preferencesTable.key, SELECTED_PROVIDER_PREFERENCE_KEY))
+    .limit(1)
+    .all();
+
+  return resolveLocalAIProvider(preference?.value);
+}
+
+export function setSelectedProvider(provider: LocalAIProvider) {
+  ensureDatabase();
+
+  const updatedAt = Date.now();
+
+  db.insert(preferencesTable)
+    .values({
+      key: SELECTED_PROVIDER_PREFERENCE_KEY,
+      value: provider,
+      updatedAt,
+    })
+    .onConflictDoUpdate({
+      target: preferencesTable.key,
+      set: {
+        value: provider,
+        updatedAt,
+      },
+    })
+    .run();
+
+  return provider;
 }

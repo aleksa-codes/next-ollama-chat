@@ -1,4 +1,5 @@
 import type { ChatUIMessage } from '@/lib/ai';
+import type { LocalAIProvider } from '@/lib/local-ai';
 
 export interface Chat {
   id: string;
@@ -12,6 +13,7 @@ export interface Chat {
 export interface ChatState {
   chats: Chat[];
   selectedModel: string | null;
+  selectedProvider: LocalAIProvider;
 }
 
 export function generateTitle(messages: ChatUIMessage[]): string {

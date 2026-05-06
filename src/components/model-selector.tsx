@@ -7,10 +7,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useOllamaModels } from '@/hooks/use-ollama-models';
+import { useLocalModels } from '@/hooks/use-local-models';
+import { LocalAIProvider } from '@/lib/local-ai';
 import { Brain, Check, ChevronDown, Image, Loader2, Sparkles } from 'lucide-react';
 
 interface ModelSelectorProps {
+  provider: LocalAIProvider | null;
   value: string;
   onValueChange: (value: string) => void;
 }
@@ -31,8 +33,8 @@ function getModelDisplayName(name: string): string {
   return name.split(':')[0];
 }
 
-export function ModelSelector({ value, onValueChange }: ModelSelectorProps) {
-  const { models, loading, error } = useOllamaModels();
+export function ModelSelector({ provider, value, onValueChange }: ModelSelectorProps) {
+  const { models, loading, error } = useLocalModels(provider);
 
   if (loading) {
     return (
@@ -46,7 +48,7 @@ export function ModelSelector({ value, onValueChange }: ModelSelectorProps) {
   if (error) {
     return (
       <div className='text-destructive flex items-center gap-2 px-3 py-2 text-base'>
-        <span>Ollama not connected</span>
+        <span>{provider === 'omlx' ? 'oMLX not connected' : 'Ollama not connected'}</span>
       </div>
     );
   }
@@ -54,7 +56,7 @@ export function ModelSelector({ value, onValueChange }: ModelSelectorProps) {
   if (models.length === 0) {
     return (
       <div className='text-muted-foreground flex items-center gap-2 px-3 py-2 text-base'>
-        <span>No models found</span>
+        <span>No models found for {provider === 'omlx' ? 'oMLX' : 'Ollama'}</span>
       </div>
     );
   }

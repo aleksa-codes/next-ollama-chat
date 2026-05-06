@@ -4,25 +4,31 @@ import { ArenaModelCard } from '@/components/arena-model-card';
 import { ArenaSidebar } from '@/components/arena-sidebar';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Button } from '@/components/ui/button';
-import { useOllamaModels } from '@/hooks/use-ollama-models';
+import { useLocalModels } from '@/hooks/use-local-models';
+import { useSelectedProvider } from '@/hooks/use-selected-provider';
 import { ARENA_MODES, ArenaCompetitor } from '@/lib/arena';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function ArenaPage() {
+  const { provider } = useSelectedProvider();
+  const { models } = useLocalModels(provider);
   const [selectedModeId, setSelectedModeId] = useState(ARENA_MODES[0].id);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [prompt, setPrompt] = useState(ARENA_MODES[0].presets[0].prompt);
   const [competitors, setCompetitors] = useState<ArenaCompetitor[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const { models } = useOllamaModels();
 
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const skippedModelsRef = useRef<Set<string>>(new Set());
 
   // Derive mode from ID
   const currentMode = ARENA_MODES.find((m) => m.id === selectedModeId) || ARENA_MODES[0];
+
+  useEffect(() => {
+    setSelectedModels((prev) => prev.filter((model) => models.some((candidate) => candidate.name === model)));
+  }, [models]);
 
   const handleModelToggle = (model: string) => {
     setSelectedModels((prev) => (prev.includes(model) ? prev.filter((m) => m !== model) : [...prev, model]));
@@ -83,10 +89,11 @@ export default function ArenaPage() {
         const modelData = models.find((m) => m.name === model);
         const supportsThinking = modelData?.supportsThinking ?? false;
 
-        const response = await fetch('/api/ollama/generate', {
+        const response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            provider,
             model,
             prompt,
             mode: selectedModeId,
@@ -172,6 +179,7 @@ export default function ArenaPage() {
     <div className='bg-background flex h-screen w-full overflow-hidden'>
       {/* Sidebar with configuration */}
       <ArenaSidebar
+        models={models}
         modes={ARENA_MODES}
         selectedModeId={selectedModeId}
         onModeSelect={setSelectedModeId}
@@ -187,18 +195,18 @@ export default function ArenaPage() {
       <div className='flex flex-1 flex-col overflow-hidden'>
         {/* Header */}
         <header className='flex h-14 shrink-0 items-center justify-between border-b px-4 lg:px-6'>
-          <div className='flex items-center gap-3'>
+          <div className='flex min-w-0 items-center gap-3'>
             <Button variant='ghost' size='icon' asChild className='-ml-1.5 h-8 w-8'>
               <Link href='/'>
                 <ArrowLeft className='h-4 w-4' />
               </Link>
             </Button>
-            <div className='flex flex-col'>
+            <div className='flex min-w-0 flex-col'>
               <h1 className='flex items-center gap-2 text-sm font-semibold'>
                 <span className='text-muted-foreground'>Battle in progress</span>
               </h1>
               {isGenerating || competitors.length > 0 ? (
-                <span className='text-muted-foreground text-xs'>
+                <span className='text-muted-foreground block max-w-[44vw] truncate text-xs lg:max-w-[52vw]'>
                   &quot;{prompt}&quot; • {currentMode.name} mode
                 </span>
               ) : (
@@ -210,7 +218,7 @@ export default function ArenaPage() {
         </header>
 
         {/* Competitors Grid */}
-        <div className='bg-muted/10 flex-1 overflow-auto p-4 pb-24 lg:p-6'>
+        <div className='bg-muted/10 flex-1 overflow-auto'>
           {competitors.length === 0 ? (
             <div className='flex h-full flex-col items-center justify-center gap-2 text-center'>
               <div className='bg-muted/50 flex h-20 w-20 items-center justify-center rounded-full'>
@@ -222,11 +230,11 @@ export default function ArenaPage() {
               </p>
             </div>
           ) : (
-            <div className={`grid w-full gap-4 ${gridCols}`}>
+            <div className={`grid w-full gap-0 ${gridCols}`}>
               {competitors.map((c) => {
                 const model = models.find((m) => m.name === c.id);
                 return (
-                  <div key={c.id} className='h-125'>
+                  <div key={c.id} className='h-[clamp(24rem,58vh,38rem)] border-b lg:border-r'>
                     <ArenaModelCard
                       competitor={c}
                       mode={currentMode.id}

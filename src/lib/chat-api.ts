@@ -1,4 +1,5 @@
 import type { Chat, ChatState } from '@/lib/chat';
+import type { LocalAIProvider } from '@/lib/local-ai';
 
 export async function fetchChatState(): Promise<ChatState> {
   const response = await fetch('/api/chat-state', {
@@ -43,5 +44,17 @@ export async function saveSelectedModel(selectedModel: string | null) {
 
   if (!response.ok) {
     throw new Error('Failed to save selected model');
+  }
+}
+
+export async function saveSelectedProvider(selectedProvider: LocalAIProvider) {
+  const response = await fetch('/api/preferences/provider', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ selectedProvider }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to save selected provider');
   }
 }
